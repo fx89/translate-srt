@@ -83,6 +83,7 @@ To translate a specified SRT file and output the results into a specified target
 ```
 translate-srt -f [source-language] [target-language] [source_file_name] [target_file_name]
 ```
+![picture of the script in action](picture.png)
 
 
 # Extending the script<a name="extending"></a>
