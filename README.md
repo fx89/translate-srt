@@ -130,7 +130,7 @@ To switch between translation adapters, use the `TRANSLATION_ADAPTER_IMPLEMENTAT
 This is a string variable whose value has to be set to the key that identifies the transation adapter in the
 `translation_adapters` object.
 
-For example, if the `translation_adapters` looks like this:
+For example, if the `translation_adapters` object looks like this:
 ```
 translation_adapters = {
     "MarianMtTranslationAdapter": MarianMtTranslationAdapter(),
