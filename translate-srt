@@ -208,18 +208,18 @@ def translate_srt_file_to_target_file(translation_adapter, source_file_name, tar
           "into file [" + abs_target_file_path + "]")
 
     # Parse the source file
-    #try:
+    try:
     srt_records = parse_srt_file(abs_source_file_path)
-    #except Exception as e:
-    #    print_error("Unable to parse source file: " + repr(e))
-    #    return
+    except Exception as e:
+        print_error("Unable to parse source file: " + repr(e))
+        return
 
     # Translate the source file
-    #try:
+    try:
     translated_srt_records = translate_srt_records(translation_adapter, srt_records)
-    #except Exception as e:
-    #    print_error("Unable to translate SRT file content: " + repr(e))
-    #    return
+    except Exception as e:
+        print_error("Unable to translate SRT file content: " + repr(e))
+        return
 
     # Put each translated SRT records into the target file
     try:
