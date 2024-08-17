@@ -74,7 +74,7 @@ To translate all the SRT files from a given source directory into a given target
 translate-srt [source-language] [target-language] [source_dir] [target_dir]
 ```
 
-To rtranslate a specific SRT file in the current directory, type
+To translate a specific SRT file in the current directory, type
 ```
 translate-srt -f [source-language] [target-language] [source_file_name]
 ```
