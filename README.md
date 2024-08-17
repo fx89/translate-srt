@@ -6,28 +6,38 @@ It was created for personal purposes and was only tested on one environment. How
 
 This project doesn't use PIP or any onther package manager. It is meant to work as a shell extension. 
 
-# Requirements
+# Table of contents
+1. [Requirements](#requirements)
+2. [Installation](#installation)
+   2.1 [Required dependencies](#dependencies)
+   2.2 [Setting up the script to work as a shell extension under Linux](#setup)
+3. [Usage](#usage)
+4. [Extending the script](#extending)
+   4.1 [Adding new translation adapters](#adding)
+   4.2 [Choosing the translation adapter](#choosing)
+
+# Requirements<a name="requirements"></a>
 ```
 Python 3.7 or higher
 ```
 
 
-# Installation
+# Installation<a name="installation"></a>
 
-## Required dependencies
+## Required dependencies<a name="dependencies"></a>
 The following lines install the MarianMTModel and its dependencies
 ```
 python3 -m pip install --upgrade pip
 python3 -m pip install sentencepiece transformers
 ```
 
-## Setting up the script to work as a shell extension under Linux
-Make the script executable
+## Setting up the script to work as a shell extension under Linux<a name="setup"></a>
+### Make the script executable
 ```
 chmod +x translate-srt
 ```
 
-Add the script to the path by opening the `~/.bashrc` file with your favorite editor and adding the location of the script to the path
+### Add the script to the path by opening the `~/.bashrc` file with your favorite editor and adding the location of the script to the path
 ```
 nano ~/.bashrc
 ```
@@ -35,7 +45,7 @@ nano ~/.bashrc
 PATH=$PATH:[location_of_the_script]
 ```
 
-Edit the script and update the header to reference the Python executable
+### Edit the script and update the header to reference the Python executable
 ```
 nano translate-srt
 ```
@@ -44,7 +54,7 @@ nano translate-srt
 ```
 
 
-# Usage
+# Usage<a name="usage"></a>
 To print the help, just type
 ```
 translate-srt --help
@@ -75,12 +85,60 @@ translate-srt -f [source-language] [target-language] [source_file_name] [target_
 ```
 
 
-# Extending the script
+# Extending the script<a name="extending"></a>
 The script can be extended with multiple so called translation adapters. The term `translation adapter`
 stands for a class that handles the translation of a given text from a source language into a target
 language. One such adapter is the `MarianMtTranslationAdapter`, which is part of the script.
 
-## Adding new translation adapters
-To add a new translation adapter, 
+## Adding new translation adapters<a name="adding"></a>
+To add a new translation adapter, perform the following steps.
 
-## Choosing the translation adapter
+### Create a new class using this interface:
+```
+class MyNewTranslationAdapter():
+  def __init(self)__
+  """
+  Nothing to do here but implementation-specific initialization
+  """
+
+  def initialize(self, source_language, target_language):
+  """
+  Registers the source and target language.
+  Performs any necessary initialization steps.
+  """
+
+  def translate(self, original_content):
+  """
+  Translates the given original_text (a string).
+  Returns the translated text (another string).
+  """
+```
+For a complete example, take a look at the `MarianMtTranslationAdapter` class.
+
+
+### Add the new class to the translation_adapters object like this:
+```
+translation_adapters = {
+    "MarianMtTranslationAdapter": MarianMtTranslationAdapter(),
+    "MyNewTranslationAdapter": MyNewTranslationAdapter()
+}
+```
+
+
+## Choosing the translation adapter<a name="choosing"></a>
+To switch between translation adapters, use the `TRANSLATION_ADAPTER_IMPLEMENTATION` variable at the top of the script.
+This is a string variable whose value has to be set to the key that identifies the transation adapter in the
+`translation_adapters` object.
+
+For example, if the `translation_adapters` looks like this:
+```
+translation_adapters = {
+    "MarianMtTranslationAdapter": MarianMtTranslationAdapter(),
+    "GoogleApiTranslationAdapter": GoogleApiAdapter(),
+    "HardcodedExpressionsTranslationAdapter": HardcodedAdapter()
+}
+```
+Then the `TRANSLATION_ADAPTER_IMPLEMENTATION` can be set to either of the following options:
+- MarianMtTranslationAdapter
+- GoogleApiTranslationAdapter
+- HardcodedExpressionsTranslationAdapter
