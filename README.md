@@ -76,4 +76,11 @@ translate-srt -f [source-language] [target-language] [source_file_name] [target_
 
 
 # Extending the script
+The script can be extended with multiple so called translation adapters. The term `translation adapter`
+stands for a class that handles the translation of a given text from a source language into a target
+language. One such adapter is the `MarianMtTranslationAdapter`, which is part of the script.
 
+## Adding new translation adapters
+To add a new translation adapter, 
+
+## Choosing the translation adapter
