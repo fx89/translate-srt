@@ -24,7 +24,7 @@ import torch
 # The number of SRT records to translate in a single batch.
 # A SRT record represents the text that's displayed on screen within a given
 # time frame and may contain 1, 2, 3 or even more lines of text.
-TRANSLATE_BATCH_SIZE = 100
+TRANSLATE_BATCH_SIZE = 50
 
 # A token that can be safely used for concatenating the lines of text before
 # translation and splitting them back afterwards, without the risk that the
