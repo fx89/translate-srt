@@ -1,0 +1,544 @@
+#!/usr/bin/python3.11
+# ===============================================================================
+
+# REQUIREMENTS
+# ===============================================================================
+# Pthon 3.7 or higher
+
+# INSTALLATION
+# ===============================================================================
+# python3.11 -m pip install --upgrade pip
+# python3.11 -m pip install sentencepiece transformers
+
+
+
+# ===============================================================================
+import os
+import sys
+import time
+# ===============================================================================
+from transformers import MarianMTModel, MarianTokenizer
+import torch
+# ===============================================================================
+
+# The number of SRT records to translate in a single batch.
+# A SRT record represents the text that's displayed on screen within a given
+# time frame and may contain 1, 2, 3 or even more lines of text.
+TRANSLATE_BATCH_SIZE = 100
+
+# A token that can be safely used for concatenating the lines of text before
+# translation and splitting them back afterwards, without the risk that the
+# language model translates it into something else.
+TRANSLATE_BATCH_LINES_DELIMETER = " 12345678901234567890 "
+
+# The script supports switching between multiple translation adapters. However,
+# the adapters must implement the specified interface and must either reside in
+# this file or be imported by this script.
+# The interface:
+#   def __init__(self):
+#   def initialize(self, source_language, target_language):
+#   def translate(self, original_content):
+TRANSLATION_ADAPTER_IMPLEMENTATION = "MarianMtTranslationAdapter"
+
+# ===============================================================================
+
+
+
+
+# ===============================================================================
+
+def print_help():
+    print ("This program translates SRT files using the " + TRANSLATION_ADAPTER_IMPLEMENTATION)
+    print ("Syntax:")
+    print (" - translate-srt --help")
+    print (" - translate-srt [source-language] [target-language] [target_dir]")
+    print (" - translate-srt [source-language] [target-language] [source_dir] [target_dir]")
+    print (" - translate-srt -f [source-language] [target-language] [source_file_name]")
+    print (" - translate-srt -f [source-language] [target-language] [source_file_name] [target_file_name]")
+
+# ===============================================================================
+
+class ProgressBar():
+    """
+    Proprietary implementation of a progress bar drawn from unicode characters.
+
+    Looks like this:
+    Progress: 【⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺⏺】 100.00%   Time: 12m 34s
+
+    Could use some work
+        - code can be shortened using more modern patterns.
+        - configuration can be externalized.
+
+    Loads of better implementations exist on the internet, but this is proprietary,
+    meaning it can be distributed without issue.
+    """
+
+    def __init__(self, top):
+        self.top = top
+        self.current = 0
+        self.pb_length = 40
+        self.pb_char_empty = " "
+        #self.pb_char_filled = "█"
+        #self.pb_char_filled = "≣"
+        #self.pb_char_filled = "⏹"
+        self.pb_char_filled = "⏺"
+        #self.pb_char_filled = "═"
+        self.start_time = time.time()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.current < self.top:
+            self.print_progressbar()
+            ret = self.current
+            self.current = self.current + 1
+            return ret
+        else:
+            self.print_progressbar()
+            print("")
+            raise StopIteration
+
+    def print_progressbar(self):
+        # Compute the index of the character until which the progres bar is filled
+        # Also compute the filled percentage
+        if (self.current == 0):
+            filled_max = 0
+            filled_pct = 0
+        else:
+            filled_max = self.current * self.pb_length / self.top
+            filled_pct = self.current * 100 / self.top
+
+        # Compute the progress bar interior
+        str_progress = ""
+        for i in range(self.pb_length):
+            if i <= filled_max:
+                str_progress = str_progress + self.pb_char_filled
+            else:
+                str_progress = str_progress + self.pb_char_empty
+
+        # Compute the elapsed time
+        elapsed_time = time.time() - self.start_time
+
+        # Print the entire progress bar
+        sys.stdout.write(
+            "\r" +
+            "Progress: 【" + str_progress + " 】" +
+            "{:.2f}%".format(filled_pct).rjust(7, " ") +
+            "   "
+            "Time: " + self.format_duration(elapsed_time)
+        )
+        sys.stdout.flush()
+
+    def format_duration(self, duration):
+        int_duration = int(duration)
+        nbr_minutes = int(int_duration / 60)
+        nbr_seconds = int_duration - (nbr_minutes * 60)
+
+        if (nbr_minutes == 0):
+            return str(nbr_seconds) + "s"
+        else:
+            return str(nbr_minutes) + "m " + str(nbr_seconds) + "s"
+
+
+
+# ===============================================================================
+
+def translate_srt_from_current_dir_into_target_dir(translation_adapter, target_dir):
+    current_path = os.path.abspath(os.getcwd())
+    translate_srt_from_source_dir_into_target_dir(translation_adapter, current_path, target_dir)
+
+# ===============================================================================
+
+def translate_srt_from_source_dir_into_target_dir(translation_adapter, source_dir, target_dir):
+    abs_source_dir = os.path.abspath(source_dir)
+    abs_target_dir = os.path.abspath(target_dir)
+
+    if (not os.path.isdir(abs_source_dir)):
+        print_error("Directory [" + abs_source_dir + "] does not exist")
+        return
+
+    if (not os.path.isdir(abs_target_dir)):
+        print_error("Directory [" + abs_target_dir + "] does not exist")
+        return
+
+    print("Translating SRT files from directory [" + abs_source_dir + "] " +
+          "into directory [" + abs_target_dir + "]")
+
+    for file in os.listdir(source_dir):
+        if (is_srt_file(file)):
+            target_file_path_name = target_dir + "/" + default_file_name(file)
+            translate_srt_file_to_target_file(translation_adapter, file, target_file_path_name)
+
+# ===============================================================================
+
+def translate_srt_file_into_current_dir(translation_adapter, source_file_name):
+    target_file_name = default_file_name(source_file_name)
+    translate_srt_file_to_target_file(translation_adapter, source_file_name, target_file_name)
+
+# ===============================================================================
+
+def translate_srt_file_to_target_file(translation_adapter, source_file_name, target_file_name):
+    # Compute absolute paths
+    abs_source_file_path = os.path.abspath(source_file_name)
+    abs_target_file_path = os.path.abspath(target_file_name)
+
+    # Make sure the source file is actually a file that exists
+    if (not os.path.isfile(abs_source_file_path)):
+        print_error("[" + abs_source_file_path + "] is not a file")
+        return
+
+    # Make sure the source file has the SRT extension
+    if (not is_srt_file(abs_source_file_path)):
+        print_error("Source file name does not have the .srt extension")
+        return
+
+    # Make sure the target file has the SRT extension
+    if (not is_srt_file(abs_target_file_path)):
+        print_error("Target file name does not have the .srt extension")
+        return
+
+    # Make sure the target file is different from the source file
+    if (abs_source_file_path == abs_target_file_path):
+        print_error("Target file must be different than the source file")
+        return
+
+    # Notify that the translation of the file has begun
+    print("> Translating file [" + abs_source_file_path + "] " +
+          "into file [" + abs_target_file_path + "]")
+
+    # Parse the source file
+    #try:
+    srt_records = parse_srt_file(abs_source_file_path)
+    #except Exception as e:
+    #    print_error("Unable to parse source file: " + repr(e))
+    #    return
+
+    # Translate the source file
+    #try:
+    translated_srt_records = translate_srt_records(translation_adapter, srt_records)
+    #except Exception as e:
+    #    print_error("Unable to translate SRT file content: " + repr(e))
+    #    return
+
+    # Put each translated SRT records into the target file
+    try:
+        write_srt_file(translated_srt_records, abs_target_file_path)
+    except Exception as e:
+        print_error("Unable to save target file:" + repr(e))
+
+# ===============================================================================
+
+def print_error(error):
+    print("ERROR: " + error)
+
+# ===============================================================================
+
+def is_srt_file(file_path_name):
+    return file_path_name.lower().endswith(".srt")
+
+# ===============================================================================
+
+def default_file_name(file_path_name):
+    # Get the parts of the path
+    parts = file_path_name.split("/")
+    parts_len = len(parts)
+
+    # Replace the last part of the path (i.e. the file name) with the new file name
+    parts[parts_len - 1] = "ro__" + parts[parts_len - 1]
+
+    # Join the parts of the path back into the full path
+    return "/".join(parts)
+
+# ===============================================================================
+
+def parse_srt_file(file_path):
+    # Strip and label all file lines with the meta-data flag
+    with open(file_path, "rb") as open_file:
+        return strip_and_group_file_lines_into_srt_records(open_file)
+
+def strip_and_group_file_lines_into_srt_records(open_file):
+    # Initialize the SRT entries array
+    srt_records = []
+
+    # Initialize the previous stripped line
+    previous_stripped_line = ""
+
+    # For each line...
+    for filelineno, line in enumerate(open_file):
+        # Strip the line
+        stripped_line = line.decode('utf-8','ignore').strip()
+
+        # If the line is a time range, it means we've reached a new SRT record
+        if (line_is_time_range(stripped_line)):
+            # If this is not the first time range in the SRT file
+            # then the SRT record needs to be added to the array
+            try:
+                srt_record
+            except NameError:
+                # not defined, nothing to do
+                a = 0
+            else:
+                srt_records.append(srt_record)
+
+            # In any case, a new SRT record needs to be created
+            srt_record = lambda: None
+            srt_record.time_range = stripped_line
+            srt_record.content_lines = []
+
+        # If the line is not a time range and is not a meta-data line
+        # then the line is a text line and it needs to be added to the
+        # array of content lines within the SRT record
+        if (not line_is_metadata(previous_stripped_line, stripped_line)):
+            srt_record.content_lines.append(stripped_line)
+
+        # The previous stripped line pointer is moved to the current stripped line
+        previous_stripped_line = stripped_line
+
+    # After the loop ends, there's one more SRT record that's not been added
+    # to the SRT records array
+    srt_records.append(srt_record)
+
+    # And then the SRT records array reference can be returned
+    return srt_records
+
+def line_is_metadata(previous_line, line):
+    return line == "" or previous_line == "" or line_is_time_range(line)
+
+def line_is_time_range(line):
+    parts = line.split("-->")
+
+    if (not len(parts) == 2):
+        return False
+
+    return is_time_index(parts[0]) and is_time_index(parts[1])
+
+def is_time_index(part):
+    trimmed_part = part.strip()
+
+    if (not len(trimmed_part) == 12):
+        return False
+
+    parts = trimmed_part.split(":")
+
+    if (not len(parts) == 3):
+        return False
+
+    if (not len(parts[2].split(",")) == 2):
+        return False
+
+    return True
+
+# ===============================================================================
+
+def translate_srt_records(translation_adapter, srt_records):
+    # Create the batches
+    batches = split_into_batches(srt_records, TRANSLATE_BATCH_SIZE)
+
+    # Initialize the translated lines array
+    translated_srt_records = []
+
+    # Translate each batch and add the result to the translated lines array
+    for batch_index in ProgressBar(len(batches)):
+        batch = batches[batch_index]
+        translated_batch = translate_batch(batch)
+        for translated_srt_record in translated_batch:
+            translated_srt_records.append(translated_srt_record)
+
+    # Finally, return the translated lines array
+    return translated_srt_records
+
+def split_into_batches(arr, batch_size):
+    batches = []
+    current_batch = []
+    for item in arr:
+        current_batch.append(item)
+        if (len(current_batch) == batch_size):
+            batches.append(current_batch)
+            current_batch = []
+
+    if (not len(current_batch) == batch_size):
+        batches.append(current_batch)
+
+    return batches
+
+def translate_batch(batch):
+    # Concatenate all non-metadata liens into a string
+    original_content = ""
+    for srt_record in batch:
+        for line in srt_record.content_lines:
+            original_content = original_content + line + TRANSLATE_BATCH_LINES_DELIMETER
+
+    # Translate the string
+    translated_content = translation_adapter.translate(original_content)
+
+    # Split the translated string into lines
+    # and put the lines into a new translated batch
+    translated_lines = translated_content.split(TRANSLATE_BATCH_LINES_DELIMETER)
+    translated_batch = []
+    translated_line_number = 0
+    for srt_record in batch:
+        translated_srt_record = lambda: None
+        translated_srt_record.time_range = srt_record.time_range
+        translated_srt_record.content_lines = []
+        translated_batch.append(translated_srt_record)
+        for line in srt_record.content_lines:
+            translated_srt_record.content_lines.append(translated_lines[translated_line_number])
+            translated_line_number = translated_line_number + 1
+
+    # Return a refernce to the translated batch
+    return translated_batch
+
+# ===============================================================================
+
+def write_srt_file(srt_records, target_path):
+    with open(target_path, "w") as target_file:
+        srt_records_len = len(srt_records)
+        for srt_record_number in range(0, srt_records_len):
+            # Get the SRT record reference
+            srt_record = srt_records[srt_record_number]
+
+            # Write the record number (1-based instead of 0-based)
+            # and the time range
+            target_file.write((str(srt_record_number + 1)) + "\r\n")
+            target_file.write(srt_record.time_range + "\r\n")
+
+            # Write the content lines
+            for content_line in srt_record.content_lines:
+                target_file.write(content_line + "\r\n")
+
+            # Write an empty line between SRT records
+            if (srt_record_number < srt_records_len - 1):
+                target_file.write("\r\n")
+
+# ===============================================================================
+
+
+
+# Translation back-end adapters
+# (makes it easy to change implementations)
+# ===============================================================================
+
+class MarianMtTranslationAdapter():
+    """
+    This translation adapter uses the MarianMTModel to translate text offline.
+    If supported by the OS, the GPU is used to run the model.
+    """
+
+    def __init__(self):
+        self.max_length = 128
+        self.num_beams = 1
+
+    def initialize(self, source_language, target_language):
+        # Compute the model name based on the source and target language
+        model_name = "Helsinki-NLP/opus-mt-" + source_language + "-" + target_language
+
+        # Try to use the GPU, if available
+        self.torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # Initialize the model and the tokenizer
+        self.model = MarianMTModel.from_pretrained(model_name).to(self.torch_device)
+        self.tokenizer = MarianTokenizer.from_pretrained(model_name, clean_up_tokenization_spaces=True)
+
+    def translate(self, original_content):
+        """
+        This model does not support large texts,
+        so the content must be split before translation
+        and then put back afterwards
+        """
+        # Split the content
+        split_content = original_content.split(TRANSLATE_BATCH_LINES_DELIMETER)
+
+        # Initialize the re-concatenated content
+        translated_content = ""
+
+        # Translate each line and add it back to the translated content
+        for line in split_content:
+            translated_content = translated_content + self.translate_string_content(line) + TRANSLATE_BATCH_LINES_DELIMETER
+
+        # Return the translated content
+        return translated_content
+
+    def translate_string_content(self, original_text):
+        input_ids = self.tokenizer(original_text, max_length=self.max_length, truncation=True, padding='max_length', return_tensors="pt").to(self.torch_device)
+        translated_ids = self.model.generate(**input_ids, max_length=self.max_length, num_beams=self.num_beams, num_return_sequences=1)
+        return self.tokenizer.decode(translated_ids[0], skip_special_tokens=True)
+
+
+
+# These are the installed translation adapters.
+# Set value of the TRANSLATION_ADAPTER_IMPLEMENTATION variable to the desired
+# implementation.
+translation_adapters = {
+    "MarianMtTranslationAdapter": MarianMtTranslationAdapter()
+}
+
+# ===============================================================================
+
+
+
+# Main
+# ===============================================================================
+
+cmd_line_args_length = len(sys.argv)
+
+# If help was requested, print the help
+if (cmd_line_args_length == 2 and sys.argv[1] == "--help"):
+    print_help()
+    quit()
+
+source_language = False
+target_language = False
+
+# If there are at least 3 parameters (4 with the script name) and the first parameter
+# is not "-f" then the source_language and target_language are the first 2 parameters
+if (cmd_line_args_length >= 4 and sys.argv[1] != "-f"):
+    source_language = sys.argv[1]
+    target_language = sys.argv[2]
+
+# If tere are at least 4 parameters (5 with the script name) and the first parameter
+# is "-f" then the source language and target language are the 2nd and 3rd parameters
+if (cmd_line_args_length >= 5 and sys.argv[1] == "-f"):
+    source_language = sys.argv[2]
+    target_language = sys.argv[3]
+
+# If source language or target language are not defined, the syntax is not correct
+if (source_language == False or target_language == False):
+    print_help()
+    quit()
+
+# Try to initialize the translation adapter
+try:
+    translation_adapter = translation_adapters[TRANSLATION_ADAPTER_IMPLEMENTATION]
+    translation_adapter.initialize(source_language, target_language)
+except Exception as e:
+    print_error("Unable to initialize translation adapter: " + repr(e))
+    quit()
+
+# If translation of all files from current dir into the target dir was requested
+# then translate all files from current dir into the target dir
+if (cmd_line_args_length == 4 and sys.argv[1] != "-f"):
+    translate_srt_from_current_dir_into_target_dir(translation_adapter, sys.argv[3])
+    quit()
+
+# If translation of all files from the source dir into the target dir was requested
+# then translate all files from the soruce dir into the target dir
+if (cmd_line_args_length == 5 and sys.argv[1] != "-f"):
+    translate_srt_from_source_dir_into_target_dir(translation_adapter, sys.argv[3], sys.argv[4])
+    quit()
+
+# If translation of the referneced file into the current dir was requested
+# then translate the referenced file into the current dir
+if (cmd_line_args_length == 5 and sys.argv[1] == "-f"):
+    translate_srt_file_into_current_dir(translation_adapter, sys.argv[4])
+    quit()
+
+# If translation of the referenced source file into the referenced target file was
+# requested then translate the referenced source file into the referenced target
+# file
+if (cmd_line_args_length == 6 and sys.argv[1] == "-f"):
+    translate_srt_file_to_target_file(translation_adapter, sys.argv[4], sys.argv[5])
+    quit()
+
+# If none of the above, print the help
+print_help()
