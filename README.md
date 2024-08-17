@@ -1,5 +1,5 @@
 # About
-This is a vanilla Python script that makes use of the [MarianMTModel]([https://www.genome.gov/](https://huggingface.co/docs/transformers/en/model_doc/marian))
+This is a vanilla Python script that makes use of the [MarianMTModel](https://huggingface.co/docs/transformers/en/model_doc/marian)
 to translate SRT files from one language into another language offline (after downloading the model for the source and target language, which happens only once).
 
 It was created for personal purposes and was only tested on one environment. However, it does not use any non-vanilla dependencies, other than the MarianMTModel.
