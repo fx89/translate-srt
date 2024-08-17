@@ -165,7 +165,7 @@ def translate_srt_from_source_dir_into_target_dir(translation_adapter, source_di
     print("Translating SRT files from directory [" + abs_source_dir + "] " +
           "into directory [" + abs_target_dir + "]")
 
-    for file in os.listdir(source_dir):
+    for file in os.listdir(abs_source_dir):
         if (is_srt_file(file)):
             target_file_path_name = target_dir + "/" + default_file_name(file)
             translate_srt_file_to_target_file(translation_adapter, file, target_file_path_name)
@@ -245,7 +245,7 @@ def default_file_name(file_path_name):
     parts_len = len(parts)
 
     # Replace the last part of the path (i.e. the file name) with the new file name
-    parts[parts_len - 1] = "ro__" + parts[parts_len - 1]
+    parts[parts_len - 1] = "translated__" + parts[parts_len - 1]
 
     # Join the parts of the path back into the full path
     return "/".join(parts)
