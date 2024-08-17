@@ -8,13 +8,13 @@ This project doesn't use PIP or any onther package manager. It is meant to work 
 
 # Table of contents
 1. [Requirements](#requirements)
-2. [Installation](#installation)
-   2.1 [Required dependencies](#dependencies)
-   2.2 [Setting up the script to work as a shell extension under Linux](#setup)
+2. [Installation](#installation)<br />
+   2.1 [Required dependencies](#dependencies)<br />
+   2.2 [Setting up the script to work as a shell extension under Linux](#setup)<br />
 3. [Usage](#usage)
-4. [Extending the script](#extending)
-   4.1 [Adding new translation adapters](#adding)
-   4.2 [Choosing the translation adapter](#choosing)
+4. [Extending the script](#extending)<br />
+   4.1 [Adding new translation adapters](#adding)<br />
+   4.2 [Choosing the translation adapter](#choosing)<br />
 
 # Requirements<a name="requirements"></a>
 ```
